@@ -5,7 +5,7 @@ import logging
 URL = "https://www.aerolineas.com.ar/"
 
 def get_token_with_selenium_wire():
-    logging.info("Starting Selenium Wire to fetch token from network requests...")
+    logging.info("Iniciando Selenium Wire para obtener el token de las requests de red...")
     options = Options()
     options.add_argument("--headless")
     driver = webdriver.Chrome(options=options)
@@ -17,7 +17,7 @@ def get_token_with_selenium_wire():
             auth_header = request.headers.get('Authorization')
             if auth_header and auth_header.startswith("Bearer "):
                 token = auth_header.split("Bearer ")[1]
-                logging.info(f"Token found in request to {request.url}")
+                logging.info(f"Token encontrado en request a {request.url}")
                 break
     driver.quit()
     return token

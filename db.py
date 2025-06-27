@@ -15,6 +15,7 @@ def init_db():
                 totalPrice INTEGER,
                 destination TEXT,
                 webLink TEXT,
+                airline TEXT,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
         """)
@@ -31,8 +32,8 @@ def save_flight(flight):
     with get_conn() as conn:
         conn.execute(
             """
-            INSERT INTO flights (date, price, return_date, return_price, totalPrice, destination, webLink)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO flights (date, price, return_date, return_price, totalPrice, destination, webLink, airline)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 flight.get("date"),
@@ -41,7 +42,8 @@ def save_flight(flight):
                 flight.get("return_price"),
                 flight.get("totalPrice"),
                 flight.get("destination"),
-                flight.get("webLink")
+                flight.get("webLink"),
+                flight.get("airline")
             )
         )
         conn.commit()

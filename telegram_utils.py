@@ -6,9 +6,10 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 
-def send_telegram(message: str):
+def send_telegram(message: str, parse_mode: str = "HTML"):
     """
     Envía un mensaje de texto al chat de Telegram configurado.
+    Permite especificar el parse_mode (por defecto HTML).
     """
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         logging.warning("TELEGRAM_TOKEN y TELEGRAM_CHAT_ID deben estar configurados en variables de entorno.")
@@ -17,7 +18,7 @@ def send_telegram(message: str):
     data = {
         "chat_id": TELEGRAM_CHAT_ID,
         "text": message,
-        "parse_mode": "HTML"
+        "parse_mode": parse_mode
     }
     try:
         resp = requests.post(url, data=data, timeout=10)
