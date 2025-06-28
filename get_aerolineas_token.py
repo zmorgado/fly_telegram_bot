@@ -1,4 +1,4 @@
-from seleniumwire import webdriver  # pip install selenium-wire
+from seleniumwire import webdriver
 from selenium.webdriver.chrome.options import Options
 import logging
 
