@@ -1,3 +1,4 @@
+import os
 from seleniumwire import webdriver
 from selenium.webdriver.chrome.options import Options
 import logging
@@ -8,6 +9,9 @@ def get_token_with_selenium_wire():
     logging.info("Iniciando Selenium Wire para obtener el token de las requests de red...")
     options = Options()
     options.add_argument("--headless")
+    chrome_path = os.getenv("CHROME_PATH")
+    if chrome_path:
+        options.binary_location = chrome_path
     driver = webdriver.Chrome(options=options)
     driver.get(URL)
 

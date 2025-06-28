@@ -20,7 +20,9 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.12'
+          python-version: '3.11'
+      - name: Install Chrome
+        uses: browser-actions/setup-chrome@v1
       - name: Install dependencies
         run: |
           pip install -r requirements.txt
@@ -28,4 +30,7 @@ jobs:
         env:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python app.py
+          CHROME_PATH: /usr/bin/google-chrome
+        run: |
+          export PATH=$PATH:/usr/bin
+          python app.py
