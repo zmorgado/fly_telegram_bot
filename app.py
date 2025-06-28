@@ -112,17 +112,17 @@ def check_flights():
             if outbound_date < START_DATE or outbound_date > END_DATE:
                 continue
             # Notificación solo ida para Level
-            if outbound["price"] is not None and outbound["price"] < ONE_WAY_PRICE_THRESHOLD:
-                # Convertir de EUR a USD
+            if outbound["price"] is not None:
                 price_usd = round(outbound["price"] * EXCHANGE_RATE["EUR_USD"], 2)
-                web_link = f"https://www.flylevel.com/Flight/Select?culture=es-ES&triptype=OW&o1=EZE&d1={dest['code']}&dd1={outbound['date']}&ADT=1&CHD=0&INL=0&r=false&mm=false&forcedCurrency=USD&forcedCulture=es-ES&newecom=true&currency=USD"
-                msg = (
-                    f"✈️ <b>Level</b> | {dest['name']}\n"
-                    f"📅 Ida: <b>{outbound['date']}</b>\n"
-                    f"💸 Precio solo ida: <b>${price_usd} USD</b>\n"
-                    f'<a href="{web_link}">Link</a>'
-                )
-                send_telegram(msg, parse_mode="HTML")
+                if price_usd < ONE_WAY_PRICE_THRESHOLD:
+                    web_link = f"https://www.flylevel.com/Flight/Select?culture=es-ES&triptype=OW&o1=EZE&d1={dest['code']}&dd1={outbound['date']}&ADT=1&CHD=0&INL=0&r=false&mm=false&forcedCurrency=USD&forcedCulture=es-ES&newecom=true&currency=USD"
+                    msg = (
+                        f"✈️ <b>Level</b> | {dest['name']}\n"
+                        f"📅 Ida: <b>{outbound['date']}</b>\n"
+                        f"💸 Precio solo ida: <b>${price_usd} USD</b>\n"
+                        f'<a href="{web_link}">Link</a>'
+                    )
+                    send_telegram(msg, parse_mode="HTML")
             for inbound in unique_days[i+1:]:
                 inbound_date = datetime.strptime(inbound["date"], "%Y-%m-%d")
                 # Solo considerar regresos exactamente 14 días después de la ida
