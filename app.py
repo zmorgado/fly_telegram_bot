@@ -6,7 +6,6 @@ import json
 from db import init_db, save_flight
 from telegram_utils import send_telegram
 from get_aerolineas_token import get_token_with_selenium_wire
-from stats import generate_and_send_report
 
 # --- Configuration ---
 PRICE_THRESHOLD = 900  # USD, round trip notification threshold
@@ -208,13 +207,6 @@ def check_flights():
 def main():
     init_db()
     check_flights()
-    if datetime.now().weekday() == 6:  # 6 is Sunday
-        logging.info("It's Sunday, starting statistical analysis...")
-        report_start_time = time.time()
-        generate_and_send_report()
-        performance_metrics["report_generation_time"] = time.time() - report_start_time
-    else:
-        logging.info("It's not Sunday, skipping weekly report.")
 
     logging.info("--- Performance Metrics ---")
     for key, value in performance_metrics.items():
