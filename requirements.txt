@@ -6,3 +6,4 @@ numpy>=1.24.0
 selenium-wire==5.1.0
 python-dotenv>=1.0.0
 blinker==1.6.3
+pandas>=2.0.0

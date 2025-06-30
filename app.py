@@ -4,7 +4,7 @@ import requests
 from db import init_db, save_flight
 from telegram_utils import send_telegram
 from get_aerolineas_token import get_token_with_selenium_wire
-from stats import analyze_flight_stats
+from stats import generate_and_send_report
 import json
 
 # Configuración
@@ -116,6 +116,17 @@ def check_flights():
                 price_usd = round(outbound["price"] * EXCHANGE_RATE["EUR_USD"], 2)
                 if price_usd < ONE_WAY_PRICE_THRESHOLD:
                     web_link = f"https://www.flylevel.com/Flight/Select?culture=es-ES&triptype=OW&o1=EZE&d1={dest['code']}&dd1={outbound['date']}&ADT=1&CHD=0&INL=0&r=false&mm=false&forcedCurrency=USD&forcedCulture=es-ES&newecom=true&currency=USD"
+                    save_flight({
+                        "date": outbound["date"],
+                        "price": price_out_usd,
+                        "return_date": None,
+                        "return_price": None,
+                        "destination": dest["code"],
+                        "webLink": web_link,
+                        "totalPrice": price_usd,
+                        "airline": "Level",
+                        "flight_type": "ONE_WAY"
+                    })
                     msg = (
                         f"✈️ <b>Level</b> | {dest['name']}\n"
                         f"📅 Ida: <b>{outbound['date']}</b>\n"
@@ -139,27 +150,20 @@ def check_flights():
                 if min_total_price is None or total_price < min_total_price:
                     min_total_price = total_price
                     min_combo = (outbound, inbound)
-                # Solo guardar y notificar si está por debajo del umbral
-                if total_price < STORING_PRICE_THRESHOLD:
-                    se_guardo = True
-                    web_link = get_web_link(dest["code"], outbound["date"], inbound["date"])
-                    save_flight({
-                        "date": outbound["date"],
-                        "price": price_out_usd,
-                        "return_date": inbound["date"],
-                        "return_price": price_in_usd,
-                        "destination": dest["code"],
-                        "webLink": web_link,
-                        "totalPrice": total_price,
-                        "airline": "Level"
-                    })
-                # Guardar para análisis estadístico
-                level_stats.append({
+
+                web_link = get_web_link(dest["code"], outbound["date"], inbound["date"])
+                save_flight({
                     "date": outbound["date"],
                     "price": price_out_usd,
-                    "destination": dest["code"]
+                    "return_date": inbound["date"],
+                    "return_price": price_in_usd,
+                    "destination": dest["code"],
+                    "webLink": web_link,
+                    "totalPrice": total_price,
+                    "airline": "Level"
                 })
-                # Solo guardar y notificar si está por debajo del umbral
+
+                # Solo notificar si está por debajo del umbral
                 if total_price < PRICE_THRESHOLD:
                     duration = (inbound_date - outbound_date).days
                     msg = (
@@ -233,6 +237,17 @@ def check_flights():
                 # Notificación solo ida
                 if price_usd < ONE_WAY_PRICE_THRESHOLD:
                     web_link = f"https://www.aerolineas.com.ar/flights-offers?adt=1&inf=0&chd=0&flexDates=false&cabinClass=Economy&flightType=ONE_WAY&leg=BUE-{dest['code']}-{outbound_date.replace('-', '')}"
+                    save_flight({
+                        "date": outbound_date,
+                        "price": price_usd,
+                        "return_date": None,
+                        "return_price": None,
+                        "destination": dest["code"],
+                        "webLink": web_link,
+                        "totalPrice": price_usd,
+                        "airline": "Aerolíneas Argentinas",
+                        "flight_type": "ONE_WAY"
+                    })
                     msg = (
                         f"✈️ <b>Aerolíneas Argentinas</b> | {dest['name']}\n"
                         f"📅 Ida: <b>{outbound_date}</b>\n"
@@ -286,24 +301,24 @@ def check_flights():
                 web_link = (
                     f"https://www.aerolineas.com.ar/flights-offers?adt=1&inf=0&chd=0&flexDates=false&cabinClass=Economy&flightType=ROUND_TRIP&leg={leg1}&leg={leg2}"
                 )
-                # Solo guardar y notificar si está por debajo del umbral
-                if total_price < STORING_PRICE_THRESHOLD:
-                    # Validar ticket real antes de guardar/notificar
-                    is_real, real_response = validate_real_ticket_aerolineas(token, dest["code"], ida_date, vuelta_date)
-                    if not is_real:
-                        continue  # No notificar ni guardar si no es real
-                    se_guardo = True
-                    save_flight({
-                        "date": ida_date,
-                        "price": ida_info["price"],
-                        "return_date": vuelta_date,
-                        "return_price": vuelta_map[vuelta_date]["price"],
-                        "destination": dest["code"],
-                        "webLink": web_link,
-                        "totalPrice": total_price,
-                        "airline": "Aerolíneas Argentinas"
-                    })
-                    if total_price < PRICE_THRESHOLD:
+                # Validar ticket real antes de guardar/notificar
+                is_real, real_response = validate_real_ticket_aerolineas(token, dest["code"], ida_date, vuelta_date)
+                if not is_real:
+                    continue  # No notificar ni guardar si no es real
+                
+                save_flight({
+                    "date": ida_date,
+                    "price": ida_info["price"],
+                    "return_date": vuelta_date,
+                    "return_price": vuelta_map[vuelta_date]["price"],
+                    "destination": dest["code"],
+                    "webLink": web_link,
+                    "totalPrice": total_price,
+                    "airline": "Aerolíneas Argentinas"
+                })
+
+                # Solo notificar si está por debajo del umbral
+                if total_price < PRICE_THRESHOLD:
                         duration = 14
                         msg = (
                             f"✈️ <b>Aerolíneas Argentinas</b> | {dest['name']} (VALIDADO)\n"
@@ -325,13 +340,9 @@ def check_flights():
             logging.info(f"[Aerolíneas] Menor opción para {dest['name']}: Ida {min_ida[0]} (${min_ida[1]})")
     logging.info("Consulta completada para Aerolíneas Argentinas.")
 
-    # Análisis estadístico: TODO: descomentar cuando se mejore la implementación
-    # logging.info("Iniciando análisis estadístico de vuelos...")
-    
-    # analyze_flight_stats({
-    #     "level": level_stats,
-    #     "aerolineas": aerolineas_stats
-    # })
+    # Análisis estadístico
+    logging.info("Iniciando análisis estadístico de vuelos...")
+    generate_and_send_report()
 
 def main():
     init_db()

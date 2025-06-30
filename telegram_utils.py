@@ -26,6 +26,24 @@ def send_telegram(message: str, parse_mode: str = "HTML"):
     except requests.RequestException as e:
         logging.error("Error enviando mensaje a Telegram: %s", e)
 
+def send_telegram_pdf(file_path: str, caption: str = ""):
+    """
+    Envía un archivo PDF al chat de Telegram configurado.
+    Permite incluir un caption (mensaje) junto al archivo.
+    """
+    if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
+        logging.warning("TELEGRAM_TOKEN y TELEGRAM_CHAT_ID deben estar configurados en variables de entorno.")
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendDocument"
+    files = {'document': open(file_path, 'rb')}
+    data = {'chat_id': TELEGRAM_CHAT_ID, 'caption': caption}
+    try:
+        resp = requests.post(url, data=data, files=files, timeout=20)
+        resp.raise_for_status()
+        logging.info(f"PDF enviado a Telegram con caption: {caption}")
+    except requests.RequestException as e:
+        logging.error(f"Error enviando PDF a Telegram: {e}")
+
 # def get_chat_id():
 #     """
 #     Envía un mensaje al bot y obtiene el chat_id del primer usuario que lo contacte.

@@ -1,165 +1,196 @@
-from statistics import mean, median, stdev
-from collections import defaultdict
-from datetime import datetime
-from reportlab.lib.pagesizes import letter
-from reportlab.pdfgen import canvas
-from reportlab.lib.units import inch
+import pandas as pd
+import sqlite3
+import logging
+from datetime import datetime, timedelta
 import matplotlib.pyplot as plt
 import seaborn as sns
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Image, Table, TableStyle
+from reportlab.lib.styles import getSampleStyleSheet
+from reportlab.lib import colors
 import os
-import numpy as np
 
-def plot_and_save(prices, dates, dest, month, airline, outdir):
-    """
-    Genera y guarda los gráficos relevantes para los precios de un destino/mes.
-    Devuelve una lista de (filepath, descripcion) para insertar en el PDF.
-    """
-    imgs = []
-    x = [datetime.strptime(d, "%Y-%m-%d") for d in dates]
-    y = prices
-    # Bar plot: precios por fecha
-    plt.figure(figsize=(8,3))
-    plt.bar(x, y, color='skyblue')
-    plt.title(f"Precios por fecha - {airline} {dest} {month}")
-    plt.ylabel("Precio ($)")
+from telegram_utils import send_telegram_pdf
+
+# --- Configuration ---
+DB_FILE = "flights.db"
+PDF_PATH = "weekly_flight_report.pdf"
+IMG_DIR = "flight_stats_imgs"
+
+# --- Data Fetching ---
+
+def get_weekly_data():
+    """Obtiene los datos de vuelos de los últimos 7 días desde la base de datos."""
+    try:
+        with sqlite3.connect(DB_FILE) as conn:
+            query = "SELECT * FROM flights WHERE created_at >= date('now', '-7 days')"
+            df = pd.read_sql_query(query, conn)
+            logging.info(f"Se obtuvieron correctamente {len(df)} registros de los últimos 7 días.")
+            return df
+    except sqlite3.Error as e:
+        logging.error(f"Error al obtener los datos semanales desde SQLite: {e}")
+        return pd.DataFrame()
+
+# --- Data Analysis & Visualization ---
+
+def generate_visualizations(df):
+    """Genera y guarda todas las visualizaciones."""
+    if df.empty:
+        return {}
+    os.makedirs(IMG_DIR, exist_ok=True)
+    
+    visualizations = {
+        "price_trends": plot_price_trends(df),
+        "top_destinations": plot_top_destinations(df),
+        "price_distribution": plot_price_distribution(df),
+        "airline_comparison": plot_airline_comparison(df),
+    }
+    return {k: v for k, v in visualizations.items() if v}
+
+def plot_price_trends(df):
+    """Plots and saves a line chart of average price per day."""
+    path = os.path.join(IMG_DIR, "price_trends.png")
+    plt.figure(figsize=(10, 5))
+    df['date'] = pd.to_datetime(df['date'])
+    avg_price_per_day = df.groupby(df['date'].dt.date)['totalPrice'].mean()
+    avg_price_per_day.plot(kind='line', marker='o')
+    plt.title("Tendencia del Precio Promedio (Últimos 7 Días)")
     plt.xlabel("Fecha")
+    plt.ylabel("Precio Promedio (USD)")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(path)
+    plt.close()
+    return path
+
+def plot_top_destinations(df):
+    """Plots and saves a bar chart of the most popular destinations."""
+    path = os.path.join(IMG_DIR, "top_destinations.png")
+    plt.figure(figsize=(10, 5))
+    dest_counts = df['destination'].value_counts().nlargest(10)
+    sns.barplot(x=dest_counts.index, y=dest_counts.values, palette="viridis")
+    plt.title("Top 10 Destinos (Últimos 7 Días)")
+    plt.xlabel("Destino")
+    plt.ylabel("Número de Vuelos")
     plt.xticks(rotation=45)
     plt.tight_layout()
-    bar_path = os.path.join(outdir, f"bar_{airline}_{dest}_{month}.png")
-    plt.savefig(bar_path)
+    plt.savefig(path)
     plt.close()
-    imgs.append((bar_path, "Distribución de precios por fecha (bar plot): permite ver la variación diaria y detectar picos o valles."))
-    # Scatter plot: precios vs fechas
-    plt.figure(figsize=(8,3))
-    plt.scatter(x, y, c=y, cmap='viridis', s=40)
-    plt.title(f"Precios vs Fecha - {airline} {dest} {month}")
-    plt.ylabel("Precio ($)")
-    plt.xlabel("Fecha")
-    plt.xticks(rotation=45)
+    return path
+
+def plot_price_distribution(df):
+    """Plots and saves a histogram of flight prices."""
+    path = os.path.join(IMG_DIR, "price_distribution.png")
+    plt.figure(figsize=(10, 5))
+    sns.histplot(df['totalPrice'], bins=20, kde=True)
+    plt.title("Distribución de los Precios de Vuelos (Últimos 7 Días)")
+    plt.xlabel("Precio Total (USD)")
+    plt.ylabel("Frecuencia")
     plt.tight_layout()
-    scatter_path = os.path.join(outdir, f"scatter_{airline}_{dest}_{month}.png")
-    plt.savefig(scatter_path)
+    plt.savefig(path)
     plt.close()
-    imgs.append((scatter_path, "Scatter plot de precios por fecha: útil para ver la dispersión y detectar outliers visualmente."))
-    # Boxplot: distribución y outliers
-    plt.figure(figsize=(4,3))
-    sns.boxplot(y=y, color='lightcoral')
-    plt.title(f"Boxplot precios - {airline} {dest} {month}")
-    plt.ylabel("Precio ($)")
+    return path
+
+def plot_airline_comparison(df):
+    """Plots and saves a boxplot comparing prices by airline."""
+    path = os.path.join(IMG_DIR, "airline_comparison.png")
+    plt.figure(figsize=(10, 5))
+    sns.boxplot(x='airline', y='totalPrice', data=df)
+    plt.title("Comparación de Precios por Aerolínea (Últimos 7 Días)")
+    plt.xlabel("Aerolínea")
+    plt.ylabel("Precio Total (USD)")
     plt.tight_layout()
-    box_path = os.path.join(outdir, f"box_{airline}_{dest}_{month}.png")
-    plt.savefig(box_path)
+    plt.savefig(path)
     plt.close()
-    imgs.append((box_path, "Boxplot: muestra la mediana, cuartiles y posibles outliers de los precios."))
-    # Heatmap: precios por día del mes (si hay suficientes datos)
-    if len(x) > 5:
-        days = [d.day for d in x]
-        min_day, max_day = min(days), max(days)
-        price_map = {d.day: p for d, p in zip(x, y)}
-        data = [[price_map.get(day, np.nan) for day in range(min_day, max_day+1)]]
-        data = np.array(data, dtype=float)  # Asegura que todo sea numérico
-        plt.figure(figsize=(8,1.5))
-        sns.heatmap(data, annot=True, fmt=".0f", cmap="YlGnBu", cbar=False, xticklabels=range(min_day, max_day+1), yticklabels=['Precio'], mask=np.isnan(data))
-        plt.title(f"Heatmap precios por día - {airline} {dest} {month}")
-        plt.tight_layout()
-        heatmap_path = os.path.join(outdir, f"heatmap_{airline}_{dest}_{month}.png")
-        plt.savefig(heatmap_path)
-        plt.close()
-        imgs.append((heatmap_path, "Heatmap: visualiza los precios por día del mes, resaltando tendencias y días atípicos."))
-    return imgs
+    return path
 
-def analyze_flight_stats(flight_data, pdf_path="flight_stats.pdf"):
-    """
-    Recibe un diccionario con los datos de vuelos de ambas aerolíneas y genera un PDF con el análisis y gráficos.
-    """
-    outdir = "flight_stats_imgs"
-    os.makedirs(outdir, exist_ok=True)
-    c = canvas.Canvas(pdf_path, pagesize=letter)
-    width, height = letter
-    y = height - inch
-    c.setFont("Helvetica-Bold", 16)
-    c.drawString(inch, y, "Análisis Estadístico de Vuelos")
-    y -= 0.5 * inch
-    c.setFont("Helvetica", 10)
-    for airline in ['level', 'aerolineas']:
-        c.setFont("Helvetica-Bold", 13)
-        c.drawString(inch, y, f"Estadísticas para {airline.capitalize()}")
-        y -= 0.3 * inch
-        vuelos = flight_data.get(airline, [])
-        if not vuelos:
-            c.setFont("Helvetica", 10)
-            c.drawString(inch, y, "Sin datos para analizar.")
-            y -= 0.2 * inch
-            continue
-        stats = defaultdict(list)
-        for v in vuelos:
-            dest = v['destination']
-            date = v['date']
-            price = v['price']
-            if not price or not date:
-                continue
-            month = date[:7]  # 'YYYY-MM'
-            stats[(dest, month)].append((date, price))
-        for (dest, month), items in stats.items():
-            precios = [p for _, p in items]
-            fechas = [d for d, _ in items]
-            if not precios:
-                continue
-            avg = mean(precios)
-            med = median(precios)
-            mn = min(precios)
-            mx = max(precios)
-            std = stdev(precios) if len(precios) > 1 else 0
-            c.setFont("Helvetica-Bold", 11)
-            c.drawString(inch, y, f"{airline.capitalize()} {dest} {month}")
-            y -= 0.2 * inch
-            c.setFont("Helvetica", 10)
-            c.drawString(inch, y, f"Promedio: ${avg:.0f}, Mediana: ${med:.0f}, Mínimo: ${mn}, Máximo: ${mx}, Desvío: ${std:.0f}")
-            y -= 0.18 * inch
-            outliers = [ (d, p) for d, p in items if p < avg - 1.5*std ]
-            if outliers:
-                c.drawString(inch, y, f"Outliers (precios muy bajos): {outliers}")
-                y -= 0.18 * inch
-            fechas_ordenadas = sorted(fechas)
-            gaps = []
-            for i in range(1, len(fechas_ordenadas)):
-                prev = datetime.strptime(fechas_ordenadas[i-1], "%Y-%m-%d")
-                curr = datetime.strptime(fechas_ordenadas[i], "%Y-%m-%d")
-                if (curr - prev).days > 1:
-                    gaps.append((fechas_ordenadas[i-1], fechas_ordenadas[i]))
-            if gaps:
-                c.drawString(inch, y, f"Gaps de fechas con precio: {gaps}")
-                y -= 0.18 * inch
-            precios_fechas = sorted(items, key=lambda x: x[1])
-            mejores = precios_fechas[:3]
-            c.drawString(inch, y, f"Mejores fechas alternativas: {mejores}")
-            y -= 0.18 * inch
-            heatmap_txt = ', '.join(["%s:$%s" % (d[-2:], p) for d, p in sorted(items)])
-            c.drawString(inch, y, f"Mapa de calor: {heatmap_txt}")
-            y -= 0.18 * inch
-            # Gráficos
-            imgs = plot_and_save(precios, fechas, dest, month, airline, outdir)
-            for img_path, desc in imgs:
-                if y < 2*inch:
-                    c.showPage()
-                    y = height - inch
-                c.drawImage(img_path, inch, y-2.2*inch, width=6*inch, height=2*inch, preserveAspectRatio=True)
-                y -= 2.2 * inch
-                c.setFont("Helvetica-Oblique", 9)
-                c.drawString(inch, y, desc)
-                y -= 0.25 * inch
-                c.setFont("Helvetica", 10)
-            y -= 0.08 * inch
-            if y < inch:
-                c.showPage()
-                y = height - inch
-    c.setFont("Helvetica-Oblique", 9)
-    c.drawString(inch, y, "Este reporte fue generado automáticamente.")
-    c.save()
+# --- PDF Generation ---
 
-# Descripción de los gráficos:
-# - Bar plot: distribución de precios por fecha, útil para ver tendencias y picos.
-# - Scatter plot: precios vs fechas, muestra dispersión y outliers.
-# - Boxplot: visualiza la mediana, cuartiles y outliers.
-# - Heatmap: precios por día del mes, resalta tendencias y días atípicos.
+def create_pdf_report(df, visualizations):
+    """Crea un informe PDF con estadísticas y visualizaciones."""
+    doc = SimpleDocTemplate(PDF_PATH, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
 
+    # Título
+    story.append(Paragraph("Informe Semanal de Estadísticas de Vuelos", styles['Title']))
+    story.append(Spacer(1, 0.25 * inch))
+
+    # Resumen
+    story.append(Paragraph("Resumen de la Semana", styles['h2']))
+    summary_text = f"Este informe cubre los datos de vuelos de los últimos 7 días. Se analizaron un total de {len(df)} vuelos."
+    story.append(Paragraph(summary_text, styles['BodyText']))
+    story.append(Spacer(1, 0.25 * inch))
+
+    # Tabla de Métricas Clave
+    if not df.empty:
+        key_metrics = {
+            "Precio Promedio": f"${df['totalPrice'].mean():.2f}",
+            "Precio Mediano": f"${df['totalPrice'].median():.2f}",
+            "Precio Mínimo": f"${df['totalPrice'].min():.2f}",
+            "Precio Máximo": f"${df['totalPrice'].max():.2f}",
+        }
+        table_data = [["Métrica", "Valor"]] + list(key_metrics.items())
+        table = Table(table_data)
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+            ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black)
+        ]))
+        story.append(table)
+        story.append(Spacer(1, 0.25 * inch))
+
+    # Visualizaciones y Conclusiones
+    for title, path in visualizations.items():
+        story.append(Paragraph(title.replace("_", " ").title(), styles['h2']))
+        story.append(Image(path, width=6 * inch, height=3 * inch))
+        story.append(Spacer(1, 0.1 * inch))
+        story.append(Paragraph("Conclusión:", styles['h3']))
+        conclusion_text = get_conclusion(title, df)
+        story.append(Paragraph(conclusion_text, styles['BodyText']))
+        story.append(Spacer(1, 0.25 * inch))
+
+    doc.build(story)
+    logging.info(f"Informe PDF creado exitosamente: {PDF_PATH}")
+
+def get_conclusion(title, df):
+    if title == "price_trends":
+        avg_price = df['totalPrice'].mean()
+        return f"El precio promedio de los vuelos en los últimos 7 días fue de ${avg_price:.2f}. La línea de tendencia muestra las fluctuaciones diarias, lo que puede ayudar a identificar los días más económicos para volar."
+    if title == "top_destinations":
+        top_dest = df['destination'].value_counts().idxmax()
+        return f"El destino más popular en los últimos 7 días fue {top_dest}. Esta información puede usarse para entender la demanda de viajes actual."
+    if title == "price_distribution":
+        median_price = df['totalPrice'].median()
+        return f"La mayoría de los vuelos se agrupan alrededor del precio mediano de ${median_price:.2f}. La distribución ayuda a comprender el rango de precios e identificar vuelos inusualmente baratos o caros."
+    if title == "airline_comparison":
+        avg_prices = df.groupby('airline')['totalPrice'].mean()
+        comparison = " vs ".join([f"{name} (${price:.2f})" for name, price in avg_prices.items()])
+        return f"Este gráfico compara la distribución de precios de las aerolíneas. En promedio, los precios son: {comparison}. Esto ayuda a elegir la aerolínea más económica."
+    return ""
+
+# --- Main Execution ---
+
+def generate_and_send_report():
+    """Función principal para generar y enviar el informe semanal."""
+    logging.basicConfig(level=logging.INFO)
+    logging.info("Iniciando la generación del informe semanal...")
+    
+    df = get_weekly_data()
+    if df.empty:
+        logging.warning("No hay datos disponibles para el informe semanal. Se omite el envío.")
+        return
+
+    visualizations = generate_visualizations(df)
+    create_pdf_report(df, visualizations)
+    
+    caption = f"Informe semanal de vuelos [{datetime.now().strftime('%Y-%m-%d')}]"
+    send_telegram_pdf(PDF_PATH, caption=caption)
+
+if __name__ == "__main__":
+    generate_and_send_report()
