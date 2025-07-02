@@ -1,6 +1,18 @@
 # Telegram Bot Pasajes (Python)
 
-Esta app en Python consulta periódicamente precios de vuelos en Level (en EUR) y Aerolíneas Argentinas (en ARS), convierte precios a USD, guarda oportunidades en SQLite y notifica por Telegram cuando detecta precios bajos. El objetivo es encontrar oportunidades reales (precios bajos y disponibles), evitar duplicados, mejorar la eficiencia y robustez, y facilitar el análisis de costos adicionales. Incluye logging detallado para depuración y análisis estadístico automático.
+Este proyecto es un bot en Python para monitorear precios de vuelos internacionales, guardar oportunidades en una base de datos SQLite y notificar automáticamente por Telegram cuando detecta precios bajos y reales. El sistema es modular, soporta múltiples proveedores (Level, Aerolíneas Argentinas, Skyscanner, Amadeus) y permite configurar regiones, destinos, fechas y umbrales de notificación.
+
+## Características principales
+
+- **Búsqueda periódica** de vuelos en múltiples proveedores mediante scraping y APIs.
+- **Conversión automática de monedas** (EUR/ARS a USD) usando tasas configurables.
+- **Notificación por Telegram** con mensajes enriquecidos (HTML, emojis, links directos).
+- **Almacenamiento en SQLite** de todas las oportunidades detectadas.
+- **Validación de tickets reales** en Aerolíneas Argentinas antes de notificar (opcional).
+- **Análisis estadístico** y generación automática de reportes PDF con gráficos.
+- **Arquitectura modular**: fácil de agregar nuevos proveedores o regiones.
+- **Configuración flexible** por región: destinos, fechas, umbrales y proveedores.
+- **Logging detallado** para depuración y monitoreo.
 
 ## Instalación
 
@@ -8,63 +20,77 @@ Esta app en Python consulta periódicamente precios de vuelos en Level (en EUR) 
    ```sh
    pip install -r requirements.txt
    ```
-2. Configura tus variables de entorno `TELEGRAM_TOKEN` y `TELEGRAM_CHAT_ID`.
-   Puedes agregarlas en tu entorno o en un archivo `.env` (usando python-dotenv si lo deseas).
-3. Ejecuta la app:
+2. Configura tus variables de entorno `TELEGRAM_TOKEN` y `TELEGRAM_CHAT_ID` (puedes usar un archivo `.env`).
+3. (Opcional) Si corres en CI/CD o headless, asegúrate de tener Chrome instalado y define `CHROME_PATH` si es necesario.
+4. Ejecuta la app principal:
    ```sh
    python app.py
    ```
 
 ## Configuración
 
-- Edita los umbrales de precio en el código:
-  - `STORING_PRICE_THRESHOLD` (ida y vuelta, guardar en DB): **1100 USD**
-  - `PRICE_THRESHOLD` (ida y vuelta, notificar): **900 USD**
-  - `ONE_WAY_PRICE_THRESHOLD` (solo ida, notificar): **400 USD**
-- Modifica destinos y fechas en las variables `DESTINATIONS`, `START_DATE` y `END_DATE`.
-  - Por defecto, el rango cubre de octubre 2025 a junio 2026, ideal para aprovechar la temporada alta de LEVEL y Aerolíneas.
-- El tipo de cambio se configura en el diccionario `EXCHANGE_RATE`.
+La configuración principal está en `config.py`:
 
-## Estructura del proyecto
+```python
+REGIONS = {
+    "spain": {
+        "providers": ["level", "aerolineas", "skyscanner", "amadeus"],
+        "date_range": ("2026-01-01", "2026-06-30"),
+        "thresholds": {"store": 1400, "notify": 1000, "one_way": 400},
+        "destinations": ["MAD", "BCN"]
+    },
+    # ...otras regiones...
+}
+```
 
-- `app.py`: Lógica principal, scraping, consulta de APIs, deduplicación, logging y notificaciones.
-- `db.py`: Funciones de base de datos SQLite.
-- `telegram_utils.py`: Envío de mensajes por Telegram (con soporte para HTML y emojis).
-- `get_aerolineas_token.py`: Obtención automática del token de Aerolíneas usando Selenium Wire.
-- `stats.py`: Análisis estadístico y generación de PDF con gráficos (bar plot, scatter, boxplot, heatmap).
-- `requirements.txt`: Dependencias del proyecto.
+- **providers**: lista de proveedores a consultar para la región.
+- **date_range**: rango de fechas (YYYY-MM-DD).
+- **thresholds**: umbrales para guardar y notificar oportunidades.
+- **destinations**: códigos IATA de los destinos.
 
-## Logging y robustez
+## Arquitectura del proyecto
 
-- Logging detallado de cada request, status code y respuesta parcial.
-- Warnings explícitos cuando la API no devuelve vuelos disponibles.
-- Validación robusta de combinaciones y deduplicación de oportunidades.
-- Validación de tickets reales en Aerolíneas antes de notificar (opcional).
-- Guarda la respuesta original de la API para el primer vuelo notificado (útil para análisis de costos adicionales).
+```
+telegram-bot-pasajes/
+├── app.py                # Lógica principal: orquestación, thresholds, notificaciones
+├── config.py             # Configuración de regiones, fechas, umbrales y destinos
+├── db.py                 # Funciones para SQLite (guardar y crear tabla)
+├── telegram_utils.py     # Envío de mensajes y archivos por Telegram
+├── get_aerolineas_token.py # Obtención automática del token de Aerolíneas (Selenium Wire)
+├── stats.py              # Análisis estadístico y generación de PDF con gráficos
+├── search_providers/     # Proveedores modulares (Level, Aerolíneas, Skyscanner, Amadeus)
+│   ├── base_provider.py
+│   ├── level.py
+│   ├── aerolineas.py
+│   ├── skyscanner.py
+│   └── amadeus.py
+├── requirements.txt      # Dependencias del proyecto
+├── .env                  # Variables de entorno (no versionar)
+└── .github/workflows/    # CI/CD para ejecución automática
+```
+
+## Uso y personalización
+
+- Ajusta los umbrales y destinos en `config.py` según tus necesidades.
+- Puedes agregar nuevos proveedores creando un archivo en `search_providers/` que herede de `BaseProvider`.
+- El bot puede ejecutarse manualmente o programarse en CI/CD (ver `.github/workflows/run.yml`).
+
+## Análisis y visualización
+
+- Al finalizar cada consulta semanal, se genera un PDF con:
+  - Estadísticas básicas (promedio, mediana, mínimo, máximo).
+  - Gráficos: tendencias de precios, distribución, boxplot por destino y aerolínea.
+  - Conclusiones automáticas para cada gráfico.
+- Personaliza los análisis en `stats.py`.
 
 ## Requisitos
 
 - Python >= 3.10
-- requests
-- selenium-wire
-- reportlab
-- matplotlib
-- seaborn
-- numpy
-- python-dotenv (opcional, para cargar variables de entorno)
+- requests, selenium-wire, reportlab, matplotlib, seaborn, numpy, pandas, python-dotenv
 
-## Análisis y visualización
+## Recomendaciones
 
-- Al finalizar cada consulta, se puede generar un archivo PDF con:
-  - Estadísticas básicas (promedio, mediana, mínimo, máximo, desvío estándar).
-  - Detección de outliers y gaps de fechas.
-  - Sugerencias de fechas alternativas.
-  - Gráficos: bar plot, scatter plot, boxplot y heatmap de precios.
-- Personaliza los análisis en `stats.py`.
-
-## Recomendaciones de uso
-
-- Aprovecha la ventana de octubre 2025 a junio 2026 para captar oportunidades en la temporada alta de LEVEL y Aerolíneas.
+- Aprovecha la ventana de octubre 2025 a junio 2026 para captar oportunidades en la temporada alta.
 - Ajusta los thresholds según el contexto económico y tu perfil de oportunidad.
 - Consulta manualmente en la web de las aerolíneas si tienes dudas sobre la disponibilidad real.
 - Revisa los logs para depurar problemas de token, cambios en la API o falta de resultados.

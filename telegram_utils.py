@@ -44,27 +44,27 @@ def send_telegram_pdf(file_path: str, caption: str = ""):
     except requests.RequestException as e:
         logging.error(f"Error enviando PDF a Telegram: {e}")
 
-# def get_chat_id():
-#     """
-#     Envía un mensaje al bot y obtiene el chat_id del primer usuario que lo contacte.
-#     """
-#     if not TELEGRAM_TOKEN:
-#         print("TELEGRAM_TOKEN debe estar configurado en variables de entorno.")
-#         return
-#     url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
-#     try:
-#         resp = requests.get(url, timeout=10)
-#         resp.raise_for_status()
-#         data = resp.json()
-#         for result in data.get("result", []):
-#             message = result.get("message")
-#             if message and "chat" in message:
-#                 chat_id = message["chat"]["id"]
-#                 print(f"Tu chat_id es: {chat_id}")
-#                 return chat_id
-#         print("No se encontró ningún chat_id. Envía un mensaje al bot desde Telegram y vuelve a intentar.")
-#     except requests.RequestException as e:
-#         print(f"Error obteniendo chat_id: {e}")
+def get_chat_id():
+    """
+    Envía un mensaje al bot y obtiene el chat_id del primer usuario que lo contacte.
+    """
+    if not TELEGRAM_TOKEN:
+        print("TELEGRAM_TOKEN debe estar configurado en variables de entorno.")
+        return
+    url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates"
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        for result in data.get("result", []):
+            message = result.get("message")
+            if message and "chat" in message:
+                chat_id = message["chat"]["id"]
+                print(f"Tu chat_id es: {chat_id}")
+                return chat_id
+        print("No se encontró ningún chat_id. Envía un mensaje al bot desde Telegram y vuelve a intentar.")
+    except requests.RequestException as e:
+        print(f"Error obteniendo chat_id: {e}")
 
-# if __name__ == "__main__":
-#     get_chat_id()
+if __name__ == "__main__":
+    get_chat_id()
