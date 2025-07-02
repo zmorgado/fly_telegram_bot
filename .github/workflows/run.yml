@@ -6,8 +6,8 @@ on:
     - cron: "0 12 * * 2"  # Martes 9:00 AR
     - cron: "0 12 * * 3"  # Miércoles 9:00 AR
     - cron: "0 15 * * 0"  # Domingo 12:00 AR
-    # Ejecución cada 3 horas
-    - cron: "0 0/3 * * *"
+    # Ejecución cada 7 horas
+    - cron: "0 0/7 * * *"
   workflow_dispatch:
 
 jobs:
