@@ -1,6 +1,6 @@
 REGIONS = {
     "spain": {
-        "providers": ["aerolineas", "skyscanner", "amadeus"],
+        "providers": ["aerolineas", "skyscanner", "amadeus", "level"],
         "date_range": ("2026-01-01", "2026-06-30"),
         "thresholds": {"store": 1200, "notify": 900, "one_way": 400},
         "destinations": ["MAD", "BCN"]  # Add more as needed

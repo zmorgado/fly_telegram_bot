@@ -39,6 +39,56 @@ def run_region_search(region_name, region_config):
                 start_date=region_config["date_range"][0],
                 end_date=region_config["date_range"][1]
             )
+
+        # Buscar la mejor combinación para round trip y one way
+        best_one_way = None
+        best_one_way_price = float('inf')
+        best_round_trip = None
+        best_round_trip_price = float('inf')
+        for flight in results:
+            if flight.get("flight_type") == "ONE_WAY":
+                if flight["totalPrice"] < best_one_way_price:
+                    best_one_way = flight
+                    best_one_way_price = flight["totalPrice"]
+            else:
+                if flight["totalPrice"] < best_round_trip_price:
+                    best_round_trip = flight
+                    best_round_trip_price = flight["totalPrice"]
+
+        if best_one_way:
+            logging.info(
+                "[BEST ONE WAY] Region: %s | Provider: %s | Date: %s | Dest: %s | Price: $%s USD | Link: %s",
+                region_name,
+                provider_name,
+                best_one_way.get('date'),
+                best_one_way.get('destination'),
+                best_one_way.get('totalPrice'),
+                best_one_way.get('webLink')
+            )
+        else:
+            logging.info(
+                "[BEST ONE WAY] Region: %s | Provider: %s | No results found.",
+                region_name,
+                provider_name
+            )
+
+        if best_round_trip:
+            logging.info(
+                "[BEST ROUND TRIP] Region: %s | Provider: %s | Date: %s | Dest: %s | Price: $%s USD | Link: %s",
+                region_name,
+                provider_name,
+                best_round_trip.get('date'),
+                best_round_trip.get('destination'),
+                best_round_trip.get('totalPrice'),
+                best_round_trip.get('webLink')
+            )
+        else:
+            logging.info(
+                "[BEST ROUND TRIP] Region: %s | Provider: %s | No results found.",
+                region_name,
+                provider_name
+            )
+
         # Normalize and process results
         for flight in results:
             # Apply region-specific thresholds
@@ -51,7 +101,7 @@ def run_region_search(region_name, region_config):
                     save_flight(flight)
                     send_telegram(flight["message"], parse_mode="HTML")
     performance_metrics[f"{region_name}_search_time"] = time.time() - start_time
-    logging.info(f"Flight search for region {region_name} completed.")
+    logging.info("Flight search for region %s completed.", region_name)
 
 def main():
     init_db()
@@ -59,7 +109,7 @@ def main():
         run_region_search(region_name, region_config)
     logging.info("--- Performance Metrics ---")
     for key, value in performance_metrics.items():
-        logging.info(f"{key}: {value/60:.2f} minutes")
+        logging.info("%s: %.2f minutes", key, value/60)
 
 if __name__ == "__main__":
     main()

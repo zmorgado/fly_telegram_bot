@@ -3,7 +3,7 @@ import requests
 from datetime import datetime, timedelta
 from get_aerolineas_token import get_token_with_selenium_wire
 
-EXCHANGE_RATE = {"ARS_USD": 1200}
+EXCHANGE_RATE = {"ARS_USD": 1285}
 
 def get_calendar_offers(token, url):
     headers = {

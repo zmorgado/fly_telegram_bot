@@ -19,7 +19,7 @@ from telegram_utils import send_telegram_pdf
 PDF_PATH = "weekly_flight_report.pdf"
 IMG_DIR = "flight_stats_imgs"
 EXCHANGE_RATE = {
-    "ARS_USD": 1200,
+    "ARS_USD": 1285,
     "EUR_USD": 1.17
 }
 DESTINATIONS = [
@@ -29,7 +29,7 @@ DESTINATIONS = [
     {"code": "SVQ", "name": "Sevilla"},
 ]
 START_DATE = datetime.now()
-END_DATE = START_DATE + timedelta(days=365)
+END_DATE = START_DATE + timedelta(days=180)
 
 # --- Robust Request Function with Retries ---
 def requests_get_with_retries(url, headers, timeout=10, retries=3, backoff_factor=0.5):
